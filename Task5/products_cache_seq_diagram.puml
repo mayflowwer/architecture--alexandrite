@@ -1,0 +1,40 @@
+@startuml
+
+actor client
+participant Internet_shop as web
+participant shop_api as api
+participant shop_cache as cache
+participant db
+
+title Работа с кешем
+
+== Обновление данных кеша ==
+
+client -> web : Создать заказ
+web -> api : POST /orders + payload
+api -> db : Создать заказ
+db --> api : Заказ создан
+api -> db : Обновить количество продуктов
+db --> api : Данные обновлены
+api -> cache : Инвалидировать / обновить кеш продуктов
+cache --> api : Кеш обновлён
+api --> web : Заказ создан
+web --> client : Отображение данных
+
+== Получение данных из кеша ==
+
+client -> web : Получить страницу
+web -> api : GET /products?page=&offset=
+alt Данные есть в кеше и кеш валиден
+    api -> cache : Получить данные из кеша
+    cache --> api : Результат из кеша
+else Кеш устарел или отсутствует
+    api -> db : Получить данные из БД
+    db --> api : Результат из БД
+    api -> cache : Сохранить данные в кеш
+    cache --> api : Кеш обновлён
+end
+api --> web : Результат запроса
+web --> client : Отображение данных
+
+@enduml

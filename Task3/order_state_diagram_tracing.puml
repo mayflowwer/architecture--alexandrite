@@ -1,0 +1,46 @@
+@startuml
+
+[*] --> INITIATED
+CLOSED --> [*]
+
+INITIATED : trace_id, uint64
+INITIATED : shop_api_span_id, uint64
+INITIATED : updated_at, date, UTC
+INITIATED -> FILE_UPLOADED : загрузить файл
+FILE_UPLOADED : + 3d_storage_span_id, uint64
+FILE_UPLOADED : + updated_at, date, UTC
+FILE_UPLOADED -> SUBMITTED : пользователь нажал кнопку Создать заказ
+SUBMITTED : + shop_api_span_id, uint64
+SUBMITTED : + updated_at, date, UTC
+SUBMITTED -> PRICE_CALCULATED : передать заказ на расчет стоимости
+PRICE_CALCULATED : + mes_api_span_id, uint64
+PRICE_CALCULATED : + price, decimal
+PRICE_CALCULATED : + currency, string
+PRICE_CALCULATED : + updated_at, date, UTC
+PRICE_CALCULATED -> MANUFACTURING_APPROVED : стоимость расчитана
+MANUFACTURING_APPROVED : + crm_api_span_id, uint64
+MANUFACTURING_APPROVED : + approved_by, uint64
+MANUFACTURING_APPROVED : + updated_at, date, UTC
+MANUFACTURING_APPROVED -> MANUFACTURING_STARTED
+MANUFACTURING_STARTED : + mes_api_span_id, uint64
+MANUFACTURING_STARTED : + started_at, date, UTC
+MANUFACTURING_STARTED : + updated_at, date, UTC
+MANUFACTURING_STARTED -> MANUFACTURING_COMPLETED
+MANUFACTURING_COMPLETED : + mes_api_span_id, uint64
+MANUFACTURING_COMPLETED : + completed_at, date, UTC
+MANUFACTURING_COMPLETED : + updated_at, date, UTC
+MANUFACTURING_COMPLETED -> PACKAGING
+PACKAGING : + mes_api_span_id, uint64
+PACKAGING : + packaging_started_at, date, UTC
+PACKAGING : + updated_at, date, UTC
+PACKAGING -> SHIPPED
+SHIPPED : + mes_api_span_id, uint64
+SHIPPED : + tracking_id, string
+SHIPPED : + shipped_at, date, UTC
+SHIPPED : + updated_at, date, UTC
+SHIPPED -> CLOSED
+CLOSED : + mes_api_span_id, uint64
+CLOSED : + closed_at, date, UTC
+CLOSED : + updated_at, date, UTC
+
+@enduml
