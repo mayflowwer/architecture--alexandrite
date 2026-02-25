@@ -1,0 +1,76 @@
+@startuml
+
+!include <C4/C4_Container>
+
+' ─── Люди ───────────────────────────────────────────────────────────────────
+Person(customer,  "Customer",  "Makes orders, uploads or creates 3D model of jewerly")
+Person(seller,    "Seller",    "Operates with orders, confirms manufacturing for the user")
+Person(api_user,  "API user",  "External person that integrates via API")
+Person(operator,  "Operator",  "Takes order in work, manufactures jewerly")
+
+' ─── Граница системы ────────────────────────────────────────────────────────
+System_Boundary(jewerly_store, "Jewerly Store System") {
+
+    ' Shop
+    Container(internet_shop,      "Internet Shop",      "Vue, TypeScript, Three.js",  "User can make an order, upload 3D model, work in 3D editor")
+    Container(shop_balancer,      "Shop Balancer",      "Nginx",                       "Balances requests to shop-api instances")
+    Container(shop_api,           "Shop API",           "SpringBoot",                  "Provides list of shop items; receives user 3D file; saves order info from customer perspective")
+    ContainerDb(shop_db_master,   "Shop DB Master",     "PostgreSQL",                  "Accepts all writes; holds main information about customers and orders")
+    ContainerDb(shop_db_replica_1,"Shop DB Replica-1",  "PostgreSQL",                  "Read replica; used by CRM API")
+    ContainerDb(shop_db_replica_2,"Shop DB Replica-2",  "PostgreSQL",                  "Read replica; used by Shop API for queries")
+    Container(storage_3d,         "3d files storage",   "S3-based storage",            "Stores 3D files so that they can be calculated")
+
+    ' CRM
+    Container(crm,                "CRM",                "Vue, TypeScript",             "Interface to manage orders and customer data")
+    Container(crm_api,            "CRM API",            "SpringBoot",                  "Backend for CRM; processes orders and customer data")
+    ContainerDb(crm_db,           "CRM DB",             "PostgreSQL",                  "Holds information about orders from CRM perspective")
+
+    ' MES
+    Container(mes_ui,             "MES",                "React, TypeScript",           "Provides interface to assign orders on operators, shows list of orders")
+    Container(mes_api,            "MES API",            "C#",                          "Shows list of orders; reads from cache for fast responses")
+    Container(mes_pricing,        "MES Pricing",        "C#",                          "Calculates price of the order based on 3D file")
+    Container(mes_allocation,     "MES Allocation",     "C#",                          "Assigns orders on operators")
+    Container(mes_cache,          "MES Cache",          "Redis",                       "Write-behind cache; stores new orders info before persisting to DB")
+    ContainerDb(mes_db,           "MES DB",             "PostgreSQL",                  "Holds information about orders, assignments on operators and statuses from MES perspective")
+
+    ' Broker
+    Container(broker,             "Messages Queue",     "RabbitMQ",                    "Sends messages about new orders and status changes between containers; has several topics")
+
+}
+
+' ─── Связи: пользователи → контейнеры ──────────────────────────────────────
+Rel(customer,  internet_shop,  "Uses")
+Rel(seller,    crm,            "Uses")
+Rel(api_user,  shop_balancer,  "Calls via API")
+Rel(operator,  mes_ui,         "Uses")
+
+' ─── Shop flow ───────────────────────────────────────────────────────────────
+Rel(internet_shop,    shop_balancer,      "HTTP/JSON")
+Rel(shop_balancer,    shop_api,           "HTTP/JSON")
+Rel(shop_api,         shop_db_master,     "SQL (writes)")
+Rel(shop_api,         shop_db_replica_2,  "SQL (reads)")
+Rel(shop_db_master,   shop_db_replica_1,  "Replicates data")
+Rel(shop_db_master,   shop_db_replica_2,  "Replicates data")
+Rel(shop_api,         storage_3d,         "Uploads files")
+Rel(shop_api,         broker,             "Publishes: order created")
+
+' ─── MES flow ────────────────────────────────────────────────────────────────
+Rel(broker,           mes_pricing,        "Delivers: calculate price task")
+Rel(mes_pricing,      storage_3d,         "Reads 3D files")
+Rel(mes_pricing,      broker,             "Publishes: price calculated")
+
+Rel(broker,           mes_allocation,     "Delivers: assign order task")
+Rel(mes_allocation,   mes_db,             "SQL (writes assignments)")
+
+Rel(mes_api,          mes_cache,          "GET/SET (reads & writes)")
+Rel(mes_cache,        mes_db,             "SQL (write-behind flush)")
+
+Rel(mes_ui,           mes_api,            "HTTP/JSON")
+
+' ─── CRM flow ────────────────────────────────────────────────────────────────
+Rel(crm,              crm_api,            "HTTP/JSON")
+Rel(crm_api,          crm_db,             "SQL")
+Rel(crm_api,          broker,             "Consumes: order / status events")
+Rel(crm_api,          shop_db_replica_1,  "SQL (reads order data)")
+
+@enduml
